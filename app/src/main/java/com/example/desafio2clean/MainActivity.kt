@@ -43,15 +43,49 @@ class MainActivity : AppCompatActivity() {
         binding.rvTaskList.layoutManager = LinearLayoutManager(this)
         adapter = TaskListAdapter()
         binding.rvTaskList.adapter = adapter
+        adapter.onClickEdit = {
+            taskUIDataHolder -> showUpdateDialog(taskUIDataHolder)
+        }
     }
 
+    private fun showUpdateDialog (taskUIDataHolder: TaskUIDataHolder){
+        val addTaskBinding = AddTaskBinding.inflate(layoutInflater)
+        addTaskBinding.titleInputLayout.editText?.setText(taskUIDataHolder.text)
+        addTaskBinding.descriptionInputLayout.editText?.setText(taskUIDataHolder.description)
+        val dialogBuilder = AlertDialog
+            .Builder(this)
+            .setTitle("Editar Tarea")
+            .setView(addTaskBinding.root)
+            .setNegativeButton("Cerrar") { dialog: DialogInterface, _: Int -> dialog.dismiss() }
+            .setPositiveButton("Guardar") { dialog: DialogInterface, _: Int ->
+                val text = addTaskBinding.taskTitleInput.text.toString()
+                val description = addTaskBinding.taskDescriptionInput.text.toString()
+                if (text.isNotEmpty()) {
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        val editTask = TaskEntity(
+                            id=taskUIDataHolder.id,
+                            title = text,
+                            description = description,
+                            createdAt = System.currentTimeMillis()
+                        )
+                        taskDao.updateTask(editTask)
+                        dialog.dismiss()
+                    }
+                }
+
+            }
+
+        val alertDialog = dialogBuilder.create()
+        alertDialog.show()
+
+    }
     private fun observeAllTasks() {
         lifecycleScope.launch(Dispatchers.IO) {
             database = TaskDatabase.getDatabase(this@MainActivity)
             taskDao = database.taskDao()
             taskDao.getAllTasks().collect() { taskEntityList ->
                 val taskUiDataList = taskEntityList.map { taskEntity ->
-                    TaskUIDataHolder(taskEntity.id, taskEntity.title)
+                    TaskUIDataHolder(taskEntity.id, taskEntity.title, taskEntity.description)
                 }
                 withContext(Dispatchers.Main){
                     adapter.updateData(taskUiDataList)
@@ -113,7 +147,9 @@ class MainActivity : AppCompatActivity() {
                 dialog.dismiss()
             }
             .setPositiveButton("Aceptar") { dialog: DialogInterface, _: Int ->
-                //Código para eliminar las tareas de la base de datos
+                lifecycleScope.launch(Dispatchers.IO) {
+                    taskDao.deleteAllTasks()
+                }
             }
         dialog.show()
     }
